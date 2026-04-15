@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: acrcloudsync2026.azurecr.io/cloudsync-backend:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: DATABASE_CONNECTION_STRING # Renommé pour refléter la connexion SQL
+          valueFrom:
+            secretKeyRef:
+              name: sql-secret
+              key: sql-password
+        - name: SQL_SERVER_NAME
+          value: "sqlserver-cloudsync-pfe.database.windows.net"
+        - name: SQL_DATABASE_NAME
+          value: "db-cloudsync-prod"
+        - name: SQL_USER_ID
+          value: "sqladmin"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak-service:8080"
+        - name: KEYCLOAK_REALM
+          value: "cloudsync-realm"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "cloudsync-app"
+        - name: CORS_ORIGIN
+          value: "*" # Autoriser toutes les origines pour le PFE (évite les erreurs CORS)
+        - name: KEYCLOAK_PUBLIC_URL
+          value: "/auth" # Utiliser le chemin relatif via l'Ingress Gateway
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

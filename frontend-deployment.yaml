@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  labels:
+    app: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: acrcloudsync2026.azurecr.io/cloudsync-frontend:latest # À remplacer par l'image ACR réelle
+        ports:
+        - containerPort: 80
+        env:
+        - name: REACT_APP_KEYCLOAK_URL
+          value: "http://4.233.61.53/auth" # URL interne du service Keycloak
+        - name: REACT_APP_KEYCLOAK_REALM
+          value: "cloudsync-realm"
+        - name: REACT_APP_KEYCLOAK_CLIENT_ID
+          value: "cloudsync-app"
+        - name: REACT_APP_API_URL
+          value: "http://backend:5000" # URL interne du service backend
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"

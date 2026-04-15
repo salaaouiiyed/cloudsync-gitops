@@ -1,0 +1,56 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cloudsync-ingress-keycloak
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/use-private-ip: "false"
+    appgw.ingress.kubernetes.io/ssl-redirect: "false"
+    # Path rewrite: strips /auth prefix before forwarding to Keycloak (which listens on /)
+    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+    # Health probe: points Azure AGIC to Keycloak's liveness endpoint (fixes 502)
+    appgw.ingress.kubernetes.io/health-probe-path: "/health/live"
+spec:
+  ingressClassName: azure-application-gateway
+  rules:
+  - http:
+      paths:
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak-service
+            port:
+              number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cloudsync-ingress-app
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/use-private-ip: "false"
+    appgw.ingress.kubernetes.io/ssl-redirect: "false"
+    # No path rewrite for API and Frontend — they handle their own paths
+    appgw.ingress.kubernetes.io/health-probe-path: "/health"
+spec:
+  ingressClassName: azure-application-gateway
+  rules:
+  - http:
+      paths:
+      # /api MUST come before / — Ingress reads paths in order (specific first)
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 5000
+      # Default catch-all for the React Frontend
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
