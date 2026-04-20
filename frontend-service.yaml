@@ -1,13 +1,25 @@
+# =============================================================================
+# SERVICE FRONTEND REACT - Version corrigée pour Application Gateway
+# =============================================================================
+# Note: Ce service est déjà correct car il utilisait déjà le port 80.
+# Nous le documentons ici pour complétude.
+# =============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
+  namespace: default                     # À adapter si besoin
   labels:
     app: frontend
+    component: ui
+    part-of: cloudsync
 spec:
   selector:
-    app: frontend
+    app: frontend                        # Doit correspondre aux labels du deployment
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80
+    - name: http
+      protocol: TCP
+      port: 80                           # ← DÉJÀ CORRECT
+      targetPort: 80                     # ← PORT NGINX du container frontend
+  type: ClusterIP

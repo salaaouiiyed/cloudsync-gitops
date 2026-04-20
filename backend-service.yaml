@@ -1,13 +1,31 @@
+# =============================================================================
+# SERVICE BACKEND API - Version corrigée pour Application Gateway
+# =============================================================================
+# Problème initial: Le service écoutait sur le port 5000, mais l'Application
+# Gateway (configurée en Terraform) envoie tout le trafic sur le port 80.
+#
+# Solution: Le service écoute maintenant sur le port 80 (pour l'App Gateway)
+# et redirige vers le port 5000 du container backend (targetPort).
+# =============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
+  namespace: default                     # À adapter si besoin
   labels:
     app: backend
+    component: api
+    part-of: cloudsync
+  annotations:
+    # S'assure que AGIC utilise le bon backend port
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
 spec:
   selector:
-    app: backend
+    app: backend                         # Doit correspondre aux labels du deployment
   ports:
-    - protocol: TCP
-      port: 5000
-      targetPort: 5000
+    - name: http
+      protocol: TCP
+      port: 80                           # ← PORT POUR L'APP GATEWAY (corrigé)
+      targetPort: 5000                   # ← PORT DU CONTAINER (inchangé)
+  type: ClusterIP                        # Exposition interne au cluster uniquement

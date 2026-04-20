@@ -1,56 +1,107 @@
+# =============================================================================
+# INGRESS CONTROLLER - Configuration pour Azure Application Gateway (AGIC)
+# =============================================================================
+# Ce fichier définit les règles de routage pour l'Application Gateway.
+#
+# Points importants:
+#   1. Tous les services utilisent maintenant le port 80 (correspond à Terraform)
+#   2. L'ordre des paths est important: /api DOIT être AVANT /
+#   3. Health probes configurées pour éviter les 502
+# =============================================================================
+
+# --- INGRESS POUR KEYCLOAK (Authentification) ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: cloudsync-ingress-keycloak
+  namespace: default
   annotations:
+    # Classe de l'ingress controller (obligatoire pour AGIC)
     kubernetes.io/ingress.class: azure/application-gateway
+    ingressClassName: azure-application-gateway
+    
+    # Utilisation de l'IP publique (false = IP privée du subnet)
     appgw.ingress.kubernetes.io/use-private-ip: "false"
+    
+    # Désactivation de la redirection SSL (HTTP uniquement pour le PFE)
     appgw.ingress.kubernetes.io/ssl-redirect: "false"
-    # Path rewrite: strips /auth prefix before forwarding to Keycloak (which listens on /)
+    
+    # Réécriture du chemin: /auth/* → /* (Keycloak écoute sur /)
+    # Exemple: /auth/admin → /admin
     appgw.ingress.kubernetes.io/backend-path-prefix: "/"
-    # Health probe: points Azure AGIC to Keycloak's liveness endpoint (fixes 502)
+    
+    # Health probe personnalisée (évite les 502)
+    # Keycloak expose /health/live pour les probes de liveness
     appgw.ingress.kubernetes.io/health-probe-path: "/health/live"
+    
+    # Délais pour les health probes
+    appgw.ingress.kubernetes.io/health-probe-interval: "30"
+    appgw.ingress.kubernetes.io/health-probe-timeout: "5"
+    appgw.ingress.kubernetes.io/health-probe-unhealthy-threshold: "3"
+    
 spec:
-  ingressClassName: azure-application-gateway
   rules:
-  - http:
-      paths:
-      - path: /auth
-        pathType: Prefix
-        backend:
-          service:
-            name: keycloak-service
-            port:
-              number: 8080
+    # Pas de host spécifique → accepte tous les hosts
+    # Pour un host spécifique, décommente:
+    # - host: app.cloudsync.pro
+    - http:
+        paths:
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak-service
+                port:
+                  number: 80            # ← CORRIGÉ: port 80 au lieu de 8080
+
 ---
+# --- INGRESS POUR L'APPLICATION (Backend API + Frontend React) ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: cloudsync-ingress-app
+  namespace: default
   annotations:
+    # Classe de l'ingress controller
     kubernetes.io/ingress.class: azure/application-gateway
+    ingressClassName: azure-application-gateway
+    
+    # Utilisation de l'IP publique
     appgw.ingress.kubernetes.io/use-private-ip: "false"
+    
+    # Désactivation de la redirection SSL
     appgw.ingress.kubernetes.io/ssl-redirect: "false"
-    # No path rewrite for API and Frontend — they handle their own paths
+    
+    # Health probe pour l'API backend
     appgw.ingress.kubernetes.io/health-probe-path: "/health"
+    
+    # Délais pour les health probes
+    appgw.ingress.kubernetes.io/health-probe-interval: "30"
+    appgw.ingress.kubernetes.io/health-probe-timeout: "5"
+    
 spec:
-  ingressClassName: azure-application-gateway
   rules:
-  - http:
-      paths:
-      # /api MUST come before / — Ingress reads paths in order (specific first)
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 5000
-      # Default catch-all for the React Frontend
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend-service
-            port:
-              number: 80
+    # Pas de host spécifique
+    - http:
+        paths:
+          # ⚠️ IMPORTANT: /api DOIT être AVANT / (ordre de priorité)
+          # L'Ingress Controller évalue les paths dans l'ordre donné
+          
+          # Route pour l'API backend
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80            # ← CORRIGÉ: port 80 au lieu de 5000
+          
+          # Route par défaut pour le frontend React
+          # Capture toutes les autres requêtes
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80            # ← DÉJÀ CORRECT
